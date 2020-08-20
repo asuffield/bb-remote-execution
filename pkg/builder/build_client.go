@@ -13,12 +13,12 @@ import (
 	"github.com/buildbarn/bb-storage/pkg/util"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/empty"
+	"go.opentelemetry.io/otel/api/trace"
+	otelcodes "go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/label"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	"go.opencensus.io/trace"
-	"go.opencensus.io/trace/propagation"
 )
 
 // BuildClient is a client for the Remote Worker protocol. It can send
@@ -32,6 +32,7 @@ type BuildClient struct {
 	filePool      filesystem.FilePool
 	clock         clock.Clock
 	instanceName  digest.InstanceName
+	tracer        trace.Tracer
 
 	// Mutable fields that are always set.
 	request               remoteworker.SynchronizeRequest
@@ -44,13 +45,14 @@ type BuildClient struct {
 
 // NewBuildClient creates a new BuildClient instance that is set to the
 // initial state (i.e., being idle).
-func NewBuildClient(scheduler remoteworker.OperationQueueClient, buildExecutor BuildExecutor, filePool filesystem.FilePool, clock clock.Clock, browserURL *url.URL, workerID map[string]string, instanceName digest.InstanceName, platform *remoteexecution.Platform) *BuildClient {
+func NewBuildClient(scheduler remoteworker.OperationQueueClient, buildExecutor BuildExecutor, filePool filesystem.FilePool, clock clock.Clock, browserURL *url.URL, workerID map[string]string, instanceName digest.InstanceName, platform *remoteexecution.Platform, tracer trace.Tracer) *BuildClient {
 	return &BuildClient{
 		scheduler:     scheduler,
 		buildExecutor: buildExecutor,
 		filePool:      filePool,
 		clock:         clock,
 		instanceName:  instanceName,
+		tracer:        tracer,
 
 		request: remoteworker.SynchronizeRequest{
 			WorkerId:     workerID,
@@ -75,20 +77,38 @@ func (bc *BuildClient) startExecution(executionRequest *remoteworker.DesiredStat
 	updates := make(chan *remoteworker.CurrentState_Executing, 10)
 	bc.executionUpdates = updates
 	go func() {
-		if tc, ok := propagation.FromBinary(executionRequest.TraceContext); ok {
-			var span *trace.Span
-			ctx, span = trace.StartSpanWithRemoteParent(ctx, "BuildClient.Execute", tc)
-			defer span.End()
+		ctx = util.PropagateExtractMap(ctx, executionRequest.W3CTraceContext)
+		ctx, span := bc.tracer.Start(ctx, "bb_worker process",
+			trace.WithSpanKind(trace.SpanKindConsumer),
+			trace.WithAttributes(
+				label.String("messaging.system", "bb_scheduler"),
+				label.String("messaging.destination", bc.instanceName.String()),
+				label.String("messaging.message_id", executionRequest.ActionDigest.Hash),
+			),
+		)
+		defer span.End()
+
+		response := bc.buildExecutor.Execute(
+			ctx,
+			bc.filePool,
+			bc.instanceName,
+			executionRequest,
+			updates)
+
+		span.AddEvent(ctx, "BuildClient.ExecutionResponse",
+			label.Bool("cached", response.CachedResult),
+			label.String("message", response.Message),
+		)
+		if response.Status != nil {
+			// Errors are returned in ExecuteResponse instead of the
+			// grpc error code, so we map it here.
+			span.SetStatus(otelcodes.Code(response.Status.Code), response.Status.Message)
 		}
+
 		updates <- &remoteworker.CurrentState_Executing{
 			ActionDigest: executionRequest.ActionDigest,
 			ExecutionState: &remoteworker.CurrentState_Executing_Completed{
-				Completed: bc.buildExecutor.Execute(
-					ctx,
-					bc.filePool,
-					bc.instanceName,
-					executionRequest,
-					updates),
+				Completed: response,
 			},
 		}
 		close(updates)

@@ -25,13 +25,12 @@ import (
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/otel/api/trace"
+	"go.opentelemetry.io/otel/label"
 
 	"google.golang.org/genproto/googleapis/longrunning"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	"go.opencensus.io/trace"
-	"go.opencensus.io/trace/propagation"
 )
 
 var (
@@ -151,6 +150,7 @@ type InMemoryBuildQueueConfiguration struct {
 // requests and list of workers) is kept in memory.
 type InMemoryBuildQueue struct {
 	contentAddressableStorage           blobstore.BlobAccess
+	tracer                              trace.Tracer
 	clock                               clock.Clock
 	uuidGenerator                       util.UUIDGenerator
 	configuration                       *InMemoryBuildQueueConfiguration
@@ -178,7 +178,7 @@ type InMemoryBuildQueue struct {
 // NewInMemoryBuildQueue creates a new InMemoryBuildQueue that is in the
 // initial state. It does not have any queues, workers or queued
 // execution requests. All of these are created by sending it RPCs.
-func NewInMemoryBuildQueue(contentAddressableStorage blobstore.BlobAccess, clock clock.Clock, uuidGenerator util.UUIDGenerator, configuration *InMemoryBuildQueueConfiguration, maximumMessageSizeBytes int) *InMemoryBuildQueue {
+func NewInMemoryBuildQueue(contentAddressableStorage blobstore.BlobAccess, tracer trace.Tracer, clock clock.Clock, uuidGenerator util.UUIDGenerator, configuration *InMemoryBuildQueueConfiguration, maximumMessageSizeBytes int) *InMemoryBuildQueue {
 	inMemoryBuildQueuePrometheusMetrics.Do(func() {
 		prometheus.MustRegister(inMemoryBuildQueueOperationsQueuedTotal)
 		prometheus.MustRegister(inMemoryBuildQueueOperationsQueuedDurationSeconds)
@@ -192,6 +192,7 @@ func NewInMemoryBuildQueue(contentAddressableStorage blobstore.BlobAccess, clock
 
 	return &InMemoryBuildQueue{
 		contentAddressableStorage:           contentAddressableStorage,
+		tracer:                              tracer,
 		clock:                               clock,
 		uuidGenerator:                       uuidGenerator,
 		configuration:                       configuration,
@@ -246,6 +247,7 @@ func (bq *InMemoryBuildQueue) Execute(in *remoteexecution.ExecuteRequest, out re
 	// Addressable Storage (CAS) multiple times, the scheduler holds
 	// on to them and passes them on to the workers.
 	ctx := out.Context()
+
 	instanceName, err := digest.NewInstanceName(in.InstanceName)
 	if err != nil {
 		return util.StatusWrapf(err, "Invalid instance name %#v", in.InstanceName)
@@ -311,14 +313,28 @@ func (bq *InMemoryBuildQueue) Execute(in *remoteexecution.ExecuteRequest, out re
 			QueuedTimestamp: bq.getCurrentTime(),
 		}
 
-		span := trace.FromContext(ctx)
-		if span != nil {
-			desiredState.TraceContext = propagation.Binary(span.SpanContext())
-		}
+		// This is close enough to
+		// https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/trace/semantic_conventions/messaging.md
+		// to use their span format.
+		//
+		// Note that ctx here is local to producing the injection, we
+		// don't otherwise use it.
+		ctx, span := bq.tracer.Start(ctx, "bb_worker send",
+			trace.WithSpanKind(trace.SpanKindProducer),
+			trace.WithAttributes(
+				label.String("messaging.system", "bb_scheduler"),
+				label.String("messaging.destination", instanceName.String()),
+				label.String("messaging.message_id", in.ActionDigest.Hash),
+			),
+		)
+		desiredState.W3CTraceContext = map[string]string{}
+		util.PropagateInjectMap(ctx, desiredState.W3CTraceContext)
 
 		o = &operation{
 			platformQueue: pq,
 			desiredState:  desiredState,
+			tracer:        bq.tracer,
+			producerSpan:  span,
 
 			name:         uuid.Must(bq.uuidGenerator()).String(),
 			instanceName: instanceName,
@@ -343,6 +359,7 @@ func (bq *InMemoryBuildQueue) Execute(in *remoteexecution.ExecuteRequest, out re
 		pq.wakeupNextWorker()
 		pq.operationsQueuedTotal.Inc()
 	}
+
 	return o.waitExecution(bq, out)
 }
 
@@ -1131,6 +1148,8 @@ func (h *queuedOperationsHeap) Pop() interface{} {
 type operation struct {
 	platformQueue *platformQueue
 	desiredState  remoteworker.DesiredState_Executing
+	tracer        trace.Tracer
+	producerSpan  trace.Span
 
 	// These fields are not strictly necessary to implement the
 	// BuildQueue and OperationQueueServer interfaces. They need to
@@ -1178,7 +1197,11 @@ func (o *operation) getStage() remoteexecution.ExecutionStage_Value {
 // operation. Streaming is stopped after execution of the operation is
 // completed.
 func (o *operation) waitExecution(bq *InMemoryBuildQueue, out remoteexecution.Execution_ExecuteServer) error {
-	ctx := out.Context()
+	ctx, span := o.tracer.Start(out.Context(), "InMemoryBuildQueue.waitExecution",
+		trace.WithSpanKind(trace.SpanKindServer),
+		trace.LinkedTo(o.producerSpan.SpanContext()),
+	)
+	defer span.End()
 
 	// Bookkeeping for determining whether operations are abandoned
 	// by clients. Operations should be removed if there are no

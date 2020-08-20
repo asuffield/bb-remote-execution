@@ -34,6 +34,8 @@ import (
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/gorilla/mux"
+	muxtrace "go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux"
+	otelglobal "go.opentelemetry.io/otel/api/global"
 )
 
 func main() {
@@ -47,6 +49,8 @@ func main() {
 	if err := global.ApplyConfiguration(configuration.Global); err != nil {
 		log.Fatal("Failed to apply global configuration options: ", err)
 	}
+
+	tracer := otelglobal.Tracer("github.com/buildbarn/bb-remote-execution/cmd/bb_worker")
 
 	browserURL, err := url.Parse(configuration.BrowserUrl)
 	if err != nil {
@@ -227,6 +231,7 @@ func main() {
 						100)
 					contentAddressableStorageWriter = blobstore.NewMetricsBlobAccess(
 						contentAddressableStorageWriter,
+						tracer,
 						clock.SystemClock,
 						"cas_batched_store")
 
@@ -295,7 +300,9 @@ func main() {
 						browserURL,
 						workerID,
 						instanceName,
-						runnerConfiguration.Platform)
+						runnerConfiguration.Platform,
+						tracer,
+					)
 					for {
 						if err := buildClient.Run(); err != nil {
 							log.Print(err)
@@ -309,6 +316,7 @@ func main() {
 
 	// Web server for metrics and profiling.
 	router := mux.NewRouter()
+	router.Use(muxtrace.Middleware("bb_worker"))
 	util.RegisterAdministrativeHTTPEndpoints(router)
 	log.Fatal(http.ListenAndServe(configuration.HttpListenAddress, router))
 }
