@@ -124,8 +124,8 @@ def go_dependencies():
     go_repository(
         name = "org_golang_google_api",
         importpath = "google.golang.org/api",
-        sum = "h1:yfrXXP61wVuLb0vBcG6qaOoIoqYEzOQS8jum51jkv2w=",
-        version = "v0.30.0",
+        sum = "h1:jMF5hhVfMkTZwHW1SDpKq5CkgWLXOb31Foaca9Zr3oM=",
+        version = "v0.28.0",
     )
     go_repository(
         name = "com_github_uber_jaeger_client_go",
@@ -136,8 +136,8 @@ def go_dependencies():
     go_repository(
         name = "org_golang_x_sync",
         importpath = "golang.org/x/sync",
-        sum = "h1:qwRHBd0NqMbJxfbotnDhm2ByMI1Shq4Y6oRJo21SGJA=",
-        version = "v0.0.0-20200625203802-6e8e738ad208",
+        sum = "h1:WXEvlFVvvGxCJLG6REjsT03iWnKLEWinaScsxF2Vm2o=",
+        version = "v0.0.0-20200317015054-43a5402ce75a",
     )
     go_repository(
         name = "io_opencensus_go",
