@@ -231,7 +231,6 @@ func main() {
 						100)
 					contentAddressableStorageWriter = blobstore.NewMetricsBlobAccess(
 						contentAddressableStorageWriter,
-						tracer,
 						clock.SystemClock,
 						"cas_batched_store")
 

@@ -13,12 +13,13 @@ import (
 	"github.com/buildbarn/bb-storage/pkg/util"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/empty"
-	"go.opentelemetry.io/otel/api/trace"
-	otelcodes "go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/label"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"go.opentelemetry.io/otel/api/trace"
+	otelcodes "go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/label"
 )
 
 // BuildClient is a client for the Remote Worker protocol. It can send
@@ -37,6 +38,7 @@ type BuildClient struct {
 	// Mutable fields that are always set.
 	request               remoteworker.SynchronizeRequest
 	nextSynchronizationAt time.Time
+	platformKey           platformKey
 
 	// Mutable fields that are only set when executing an action.
 	executionCancellation func()
@@ -77,14 +79,9 @@ func (bc *BuildClient) startExecution(executionRequest *remoteworker.DesiredStat
 	updates := make(chan *remoteworker.CurrentState_Executing, 10)
 	bc.executionUpdates = updates
 	go func() {
-		ctx = util.PropagateExtractMap(ctx, executionRequest.W3CTraceContext)
+		ctx = util.PropagateW3CTraceContextToContext(ctx, executionRequest.W3CTraceContext)
 		ctx, span := bc.tracer.Start(ctx, "bb_worker process",
-			trace.WithSpanKind(trace.SpanKindConsumer),
-			trace.WithAttributes(
-				label.String("messaging.system", "bb_scheduler"),
-				label.String("messaging.destination", bc.instanceName.String()),
-				label.String("messaging.message_id", executionRequest.ActionDigest.Hash),
-			),
+			trace.WithSpanKind(trace.SpanKindConsumer), withMessagingAttributes(bc.platformKey, executionRequest.ActionDigest),
 		)
 		defer span.End()
 
@@ -173,6 +170,12 @@ func (bc *BuildClient) consumeExecutionUpdatesNonBlocking() {
 // Run a iteration of the Remote Worker client, by performing a single
 // synchronization against the scheduler.
 func (bc *BuildClient) Run() error {
+	var err error
+	bc.platformKey, err = newPlatformKey(bc.instanceName, bc.request.Platform)
+	if err != nil {
+		return err
+	}
+
 	// When executing an action, see if there are any updates on the
 	// execution state.
 	if bc.executionCancellation != nil {

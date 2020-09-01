@@ -26,7 +26,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/api/trace"
-	"go.opentelemetry.io/otel/label"
 
 	"google.golang.org/genproto/googleapis/longrunning"
 	"google.golang.org/grpc/codes"
@@ -320,15 +319,9 @@ func (bq *InMemoryBuildQueue) Execute(in *remoteexecution.ExecuteRequest, out re
 		// Note that ctx here is local to producing the injection, we
 		// don't otherwise use it.
 		ctx, span := bq.tracer.Start(ctx, "bb_worker send",
-			trace.WithSpanKind(trace.SpanKindProducer),
-			trace.WithAttributes(
-				label.String("messaging.system", "bb_scheduler"),
-				label.String("messaging.destination", instanceName.String()),
-				label.String("messaging.message_id", in.ActionDigest.Hash),
-			),
+			trace.WithSpanKind(trace.SpanKindProducer), withMessagingAttributes(platformKey, in.ActionDigest),
 		)
-		desiredState.W3CTraceContext = map[string]string{}
-		util.PropagateInjectMap(ctx, desiredState.W3CTraceContext)
+		desiredState.W3CTraceContext = util.PropagateContextToW3CTraceContext(ctx)
 
 		o = &operation{
 			platformQueue: pq,
@@ -359,7 +352,6 @@ func (bq *InMemoryBuildQueue) Execute(in *remoteexecution.ExecuteRequest, out re
 		pq.wakeupNextWorker()
 		pq.operationsQueuedTotal.Inc()
 	}
-
 	return o.waitExecution(bq, out)
 }
 
@@ -839,6 +831,10 @@ func (k *platformKey) getPlatform() *remoteexecution.Platform {
 		panic(fmt.Sprintf("Failed to unmarshal previously marshalled platform: %s", err))
 	}
 	return &platform
+}
+
+func (k *platformKey) String() string {
+	return fmt.Sprintf("%s,%s", k.instanceName, k.platform)
 }
 
 func newPlatformKey(instanceName digest.InstanceName, platform *remoteexecution.Platform) (platformKey, error) {
