@@ -2,7 +2,7 @@ module github.com/buildbarn/bb-remote-execution
 
 go 1.14
 
-replace github.com/buildbarn/bb-storage => github.com/asuffield/bb-storage v0.0.0-20200901154503-006c26285e62
+replace github.com/buildbarn/bb-storage => github.com/asuffield/bb-storage v0.0.0-20200902151054-efe7fb7df584
 
 require (
 	github.com/aws/aws-sdk-go v1.34.9

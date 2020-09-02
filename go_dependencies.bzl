@@ -27,8 +27,8 @@ def go_dependencies():
         name = "com_github_buildbarn_bb_storage",
         importpath = "github.com/buildbarn/bb-storage",
         replace = "github.com/asuffield/bb-storage",
-        sum = "h1:5zce0TiVTkXfxNiM3BwrDJCCiVjVImV+KBLirYHBuo4=",
-        version = "v0.0.0-20200901154503-006c26285e62",
+        sum = "h1:OQJZzF5uio+b98SUtAfTgEfMNYGLcyZ14OtVMdcEVcM=",
+        version = "v0.0.0-20200902151054-efe7fb7df584",
     )
     go_repository(
         name = "com_github_golang_mock",
@@ -829,8 +829,8 @@ def go_dependencies():
     go_repository(
         name = "io_opencensus_go_contrib_exporter_stackdriver",
         importpath = "contrib.go.opencensus.io/exporter/stackdriver",
-        sum = "h1:Dll2uFfOVI3fa8UzsHyP6z0M6fEc9ZTAMo+Y3z282Xg=",
-        version = "v0.12.1",
+        sum = "h1:ZRVpDigsb+nVI/yps/NLDOYzYjFFmm3OCsBhmYocxR0=",
+        version = "v0.12.9",
     )
     go_repository(
         name = "io_opencensus_go_contrib_integrations_ocsql",
@@ -895,8 +895,8 @@ def go_dependencies():
     go_repository(
         name = "org_golang_x_exp",
         importpath = "golang.org/x/exp",
-        sum = "h1:QE6XYQK6naiK1EPAe1g/ILLxN5RBoH5xkJk3CqlMI/Y=",
-        version = "v0.0.0-20200224162631-6cc2880d07d6",
+        sum = "h1:vfV2BR+q1+/jmgJR30Ms3RHbryruQ3Yd83lLAAue9cs=",
+        version = "v0.0.0-20200821190819-94841d0725da",
     )
     go_repository(
         name = "org_golang_x_image",
@@ -950,8 +950,8 @@ def go_dependencies():
     go_repository(
         name = "com_github_gordonklaus_ineffassign",
         importpath = "github.com/gordonklaus/ineffassign",
-        sum = "h1:U/zHjaVG/sECz5xhnh7kPH+Fv/maPbhZPcaTquo5sPg=",
-        version = "v0.0.0-20200809085317-e36bfde3bb78",
+        sum = "h1:vc7Dmrk4JwS0ZPS6WZvWlwDflgDTA26jItmbSj83nug=",
+        version = "v0.0.0-20200309095847-7953dde2c7bf",
     )
 
     go_repository(
@@ -1001,12 +1001,7 @@ def go_dependencies():
         sum = "h1:bkDMymVj6gIkPfgC5ci5atq0OYbfUHSn8NvsmyfyMq4=",
         version = "v0.11.0",
     )
-    go_repository(
-        name = "com_github_go_redis_redis",
-        importpath = "github.com/go-redis/redis",
-        sum = "h1:K0pv1D7EQUjfyoMql+r/jZqCLizCGKFlFgcHWWmHQjg=",
-        version = "v6.15.9+incompatible",
-    )
+
     go_repository(
         name = "com_github_antihax_optional",
         importpath = "github.com/antihax/optional",
@@ -1084,4 +1079,46 @@ def go_dependencies():
         importpath = "go.opentelemetry.io/otel/exporters/otlp",
         sum = "h1:lNOQd4CG+6ESHBzCZPAa+vX9HUS0hsWISM7rMAe568Q=",
         version = "v0.11.0",
+    )
+    go_repository(
+        name = "com_github_dgryski_go_rendezvous",
+        importpath = "github.com/dgryski/go-rendezvous",
+        sum = "h1:lO4WD4F/rVNCu3HqELle0jiPLLBs70cWOduZpkS1E78=",
+        version = "v0.0.0-20200823014737-9f7001d12a5f",
+    )
+    go_repository(
+        name = "com_github_go_redis_redis_v8",
+        importpath = "github.com/go-redis/redis/v8",
+        sum = "h1:gcRNXZvs4PFi/mptho1D3hXant8JsbQKQxQ+0W3QGPw=",
+        version = "v8.0.0-beta.9",
+    )
+    go_repository(
+        name = "com_github_opentracing_opentracing_go",
+        importpath = "github.com/opentracing/opentracing-go",
+        sum = "h1:uEJPy/1a5RIPAJ0Ov+OIO8OxWu77jEv+1B0VhjKrZUs=",
+        version = "v1.2.0",
+    )
+    go_repository(
+        name = "com_github_uber_go_atomic",
+        importpath = "github.com/uber-go/atomic",
+        sum = "h1:yOuPqEq4ovnhEjpHmfFwsqBXDYbQeT6Nb0bwD6XnD5o=",
+        version = "v1.4.0",
+    )
+    go_repository(
+        name = "com_github_uber_jaeger_client_go",
+        importpath = "github.com/uber/jaeger-client-go",
+        sum = "h1:Q2Pp6v3QYiocMxomCaJuwQGFt7E53bPYqEgug/AoBtY=",
+        version = "v2.16.0+incompatible",
+    )
+    go_repository(
+        name = "com_github_uber_jaeger_lib",
+        importpath = "github.com/uber/jaeger-lib",
+        sum = "h1:MxZXOiR2JuoANZ3J6DE/U0kSFv/eJ/GfSYVCjK7dyaw=",
+        version = "v2.2.0+incompatible",
+    )
+    go_repository(
+        name = "io_opencensus_go_contrib_exporter_jaeger",
+        importpath = "contrib.go.opencensus.io/exporter/jaeger",
+        sum = "h1:nhTv/Ry3lGmqbJ/JGvCjWxBl5ozRfqo86Ngz59UAlfk=",
+        version = "v0.2.0",
     )
